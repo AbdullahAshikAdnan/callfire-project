@@ -2,7 +2,7 @@
   "name": "glitch-express-server",
   "version": "0.1.0",
   "description": "A simple Express app on Glitch",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
