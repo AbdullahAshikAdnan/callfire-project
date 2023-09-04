@@ -30,6 +30,17 @@ function getHeaders() {
   };
 }
 
+// Make a GET request with authentication headers
+axios.get(callFireApiUrl + "/calls", { headers: getHeaders() })
+  .then((response) => {
+    // Handle the API response here
+    console.log(response.data);
+  })
+  .catch((error) => {
+    // Handle errors
+    console.error(error);
+  });
+
 // Define route for the root URL
 app.get("/", (req, res) => {
   res.send("Hello, Glitch!");
@@ -48,7 +59,6 @@ app.post("/jotform-submission", upload.single("input_8"), async (req, res) => {
   // Extract form data from JotForm submission
   const areaCode = req.body["input_5_area"];
   const phoneNumber = req.body["input_5_phone"];
-  const voicemailFile = req.file;
   const rvmDate = `${req.body["month_7"]}/${req.body["day_7"]}/${req.body["year_7"]}`;
   const rvmTime = `${req.body["hour_7"]}:${req.body["min_7"]} ${req.body["ampm_7"]}`;
   const quantity1RVMCalls = parseInt(req.body["input_17_1000"]);
@@ -59,12 +69,19 @@ app.post("/jotform-submission", upload.single("input_8"), async (req, res) => {
 
   // Perform any necessary validation on the form data
 
-  // Call function to schedule RVM
+  // Download and process the voicemail file
+  const voicemailUrl = req.body["input_8"]; // Get the URL from the webhook data
+  const voicemailFileName = `${Date.now()}_voicemail.mp3`; // Generate a unique file name
+  const voicemailFilePath = path.join("uploads", voicemailFileName);
+
   try {
-    await sendOutboundCall(
+    await downloadAndProcessVoicemail(voicemailUrl, voicemailFilePath);
+
+  // Call function to schedule RVM
+  await sendOutboundCall(
       areaCode,
       phoneNumber,
-      voicemailFile,
+      voicemailFilePath,
       rvmDate,
       rvmTime,
       quantity1RVMCalls,
@@ -73,11 +90,41 @@ app.post("/jotform-submission", upload.single("input_8"), async (req, res) => {
       quantity20RVMCalls,
       quantity25RVMCalls
     );
+
+    // Delete the voicemail file after processing
+    fs.unlinkSync(voicemailFilePath);
+    
     res.status(200).json({ message: "RVM scheduled successfully" });
   } catch (error) {
+    // Handle errors that occur during voicemail processing or scheduling
+  console.error("Failed to schedule RVM:", error);
+
+  // Delete the voicemail file if an error occurs during processing or scheduling
+  try {
+    fs.unlinkSync(voicemailFilePath);
+  } catch (unlinkError) {
+    console.error("Failed to delete voicemail file:", unlinkError);
+  }
     res.status(500).json({ error: "Failed to schedule RVM" });
   }
 });
+
+// Function to download and process the voicemail file
+async function downloadAndProcessVoicemail(voicemailUrl, voicemailFilePath) {
+  try {
+    const response = await axios.get(voicemailUrl, { responseType: "stream" });
+    const writer = fs.createWriteStream(voicemailFilePath);
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+  } catch (error) {
+    console.error("Failed to download voicemail file:", error);
+    throw error;
+  }
+}
 
 // Function to schedule RVM for Package 1
 async function scheduleRVMForPackage1(payload) {
@@ -148,7 +195,7 @@ async function scheduleRVMForPackage25(payload) {
 async function sendOutboundCall(
   areaCode,
   phoneNumber,
-  voicemailFile,
+  voicemailFilePath,
   rvmDate,
   rvmTime,
   quantity1RVMCalls,
@@ -161,8 +208,7 @@ async function sendOutboundCall(
   const phone_number_with_area_code = `+1${areaCode}${phoneNumber}`;
 
   // Read and encode the uploaded voicemail file data to base64
-  const filePath = path.join("uploads", voicemailFile.filename);
-  const fileData = fs.readFileSync(filePath);
+  const fileData = fs.readFileSync(voicemailFilePath);
   const audio_url = "data:audio/mp3;base64," + fileData.toString("base64"); 
 
   // Use Axios to make API request to schedule RVM call
