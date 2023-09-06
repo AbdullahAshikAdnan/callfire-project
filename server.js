@@ -227,6 +227,8 @@ async function sendOutboundCall(
         }
       ],
       message: "This is my call message."
+      rvmDate: rvmDate,
+      rvmTime: rvmTime,
     } 
  };
 
