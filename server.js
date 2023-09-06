@@ -226,7 +226,7 @@ async function sendOutboundCall(
           phoneNumber: "1234567891"
         }
       ],
-      message: "This is my call message."
+      message: "This is my call message.",
       rvmDate: rvmDate,
       rvmTime: rvmTime,
     } 
